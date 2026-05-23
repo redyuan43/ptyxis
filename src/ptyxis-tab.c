@@ -127,6 +127,9 @@ static XdpPortal *portal;
 
 static GParamSpec *properties[N_PROPS];
 static guint signals[N_SIGNALS];
+static char *ptyxis_tab_dup_device_path (PtyxisTab  *self,
+                                         const char *uri);
+static char *ptyxis_tab_dup_window_title_path (PtyxisTab *self);
 static double zoom_font_scales[] = {
   0,
 
@@ -682,6 +685,7 @@ ptyxis_tab_notify_window_title_cb (PtyxisTab      *self,
   g_assert (PTYXIS_IS_TERMINAL (terminal));
 
   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TITLE]);
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_SUBTITLE]);
 }
 
 static void
@@ -692,6 +696,7 @@ ptyxis_tab_notify_window_subtitle_cb (PtyxisTab      *self,
   g_assert (PTYXIS_IS_TERMINAL (terminal));
 
   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_SUBTITLE]);
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TITLE]);
 }
 
 static void
@@ -1621,59 +1626,130 @@ ptyxis_tab_set_title_prefix (PtyxisTab  *self,
 char *
 ptyxis_tab_dup_title (PtyxisTab *self)
 {
+  g_autofree char *current_directory_uri = NULL;
+  g_autofree char *title = NULL;
   GString *gstr;
 
   g_return_val_if_fail (PTYXIS_IS_TAB (self), NULL);
 
-  gstr = g_string_new (self->title_prefix);
+  current_directory_uri = ptyxis_terminal_dup_current_directory_uri (self->terminal);
+  if (ptyxis_str_empty0 (current_directory_uri))
+    g_set_str (&current_directory_uri, self->initial_working_directory_uri);
+  if (ptyxis_str_empty0 (current_directory_uri))
+    g_set_str (&current_directory_uri, self->previous_working_directory_uri);
 
-  if (!self->ignore_osc_title)
-    {
-      const char *window_title;
-
-      G_GNUC_BEGIN_IGNORE_DEPRECATIONS
-        window_title = vte_terminal_get_window_title (VTE_TERMINAL (self->terminal));
-      G_GNUC_END_IGNORE_DEPRECATIONS
-
-      if (window_title && window_title[0])
-        g_string_append (gstr, window_title);
-      else if (self->command != NULL && self->command[0] != NULL)
-        g_string_append (gstr, self->command[0]);
-      else if (self->initial_title != NULL)
-        g_string_append (gstr, self->initial_title);
-    }
-
-  if (gstr->len == 0)
-    g_string_append (gstr, _("Terminal"));
+  title = ptyxis_tab_dup_device_path (self, current_directory_uri);
+  gstr = g_string_new (title);
 
   if (self->state == PTYXIS_TAB_STATE_EXITED)
     g_string_append_printf (gstr, " (%s)", _("Exited"));
   else if (self->state == PTYXIS_TAB_STATE_FAILED)
     g_string_append_printf (gstr, " (%s)", _("Failed"));
-  else if (self->has_foreground_process &&
-           !ptyxis_str_empty0 (self->command_line) &&
-           !ptyxis_str_empty0 (self->program_name) &&
-           !ptyxis_is_shell (self->program_name))
-    g_string_append_printf (gstr, " — %s", self->command_line);
 
   return g_string_free (gstr, FALSE);
 }
 
 static char *
-ptyxis_tab_collapse_uri (const char *uri)
+ptyxis_tab_dup_window_title_path (PtyxisTab *self)
+{
+  g_autofree char *title = NULL;
+  g_autofree char *left = NULL;
+  g_autofree char *right = NULL;
+  g_autofree char *host = NULL;
+  const char *window_title;
+  const char *colon;
+  const char *at;
+
+  g_assert (PTYXIS_IS_TAB (self));
+
+  G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+    window_title = vte_terminal_get_window_title (VTE_TERMINAL (self->terminal));
+  G_GNUC_END_IGNORE_DEPRECATIONS
+
+  if (ptyxis_str_empty0 (window_title))
+    return NULL;
+
+  title = g_strstrip (g_strdup (window_title));
+  colon = strchr (title, ':');
+  if (colon == NULL)
+    return NULL;
+
+  left = g_strndup (title, colon - title);
+  g_strstrip (left);
+
+  right = g_strdup (colon + 1);
+  g_strstrip (right);
+
+  if (ptyxis_str_empty0 (left) ||
+      ptyxis_str_empty0 (right) ||
+      strchr (left, ' ') != NULL ||
+      (right[0] != '/' && right[0] != '~'))
+    return NULL;
+
+  at = strrchr (left, '@');
+  host = g_strdup (at != NULL ? at + 1 : left);
+  g_strstrip (host);
+
+  if (ptyxis_str_empty0 (host))
+    return NULL;
+
+  return g_strdup_printf ("%s: %s", host, right);
+}
+
+static char *
+ptyxis_tab_dup_device_path (PtyxisTab  *self,
+                            const char *uri)
 {
   g_autoptr(GFile) file = NULL;
+  g_autoptr(GUri) parsed = NULL;
+  g_autofree char *window_title_path = NULL;
+  g_autofree char *path = NULL;
+  g_autofree char *decoded_path = NULL;
+  const char *host = NULL;
+  const char *local_hostname;
 
-  if (uri == NULL)
-    return NULL;
+  g_assert (PTYXIS_IS_TAB (self));
 
-  if (!(file = g_file_new_for_uri (uri)))
-    return NULL;
+  window_title_path = ptyxis_tab_dup_window_title_path (self);
+  if (!ptyxis_str_empty0 (window_title_path))
+    return g_steal_pointer (&window_title_path);
 
-  if (g_file_is_native (file))
-    return ptyxis_path_collapse (g_file_peek_path (file));
+  local_hostname = g_get_host_name ();
+  if (ptyxis_str_empty0 (local_hostname))
+    local_hostname = _("My Computer");
 
-  return strdup (uri);
+  if (!ptyxis_str_empty0 (uri))
+    {
+      file = g_file_new_for_uri (uri);
+
+      if (file != NULL && g_file_is_native (file))
+        path = ptyxis_path_collapse (g_file_peek_path (file));
+      else if ((parsed = g_uri_parse (uri, G_URI_FLAGS_PARSE_RELAXED, NULL)))
+        {
+          const char *escaped_path = g_uri_get_path (parsed);
+
+          host = g_uri_get_host (parsed);
+
+          if (!ptyxis_str_empty0 (escaped_path))
+            decoded_path = g_uri_unescape_string (escaped_path, NULL);
+
+          if (!ptyxis_str_empty0 (decoded_path))
+            path = g_steal_pointer (&decoded_path);
+          else
+            path = g_strdup (uri);
+        }
+      else
+        {
+          path = g_strdup (uri);
+        }
+    }
+
+  if (ptyxis_str_empty0 (path))
+    path = ptyxis_path_collapse (g_get_home_dir ());
+
+  return g_strdup_printf ("%s: %s",
+                          ptyxis_str_empty0 (host) ? local_hostname : host,
+                          ptyxis_str_empty0 (path) ? "~" : path);
 }
 
 char *
@@ -1686,13 +1762,13 @@ ptyxis_tab_dup_subtitle (PtyxisTab *self)
 
   current_file_uri = ptyxis_terminal_dup_current_file_uri (self->terminal);
   if (current_file_uri != NULL && current_file_uri[0] != 0)
-    return ptyxis_tab_collapse_uri (current_file_uri);
+    return ptyxis_tab_dup_device_path (self, current_file_uri);
 
   current_directory_uri = ptyxis_terminal_dup_current_directory_uri (self->terminal);
   if (current_directory_uri != NULL && current_directory_uri[0] != 0)
-    return ptyxis_tab_collapse_uri (current_directory_uri);
+    return ptyxis_tab_dup_device_path (self, current_directory_uri);
 
-  return g_strdup ("");
+  return ptyxis_tab_dup_device_path (self, NULL);
 }
 
 char *
@@ -1709,7 +1785,8 @@ ptyxis_tab_set_initial_working_directory_uri (PtyxisTab  *self,
 {
   g_return_if_fail (PTYXIS_IS_TAB (self));
 
-  g_set_str (&self->initial_working_directory_uri, initial_working_directory_uri);
+  if (g_set_str (&self->initial_working_directory_uri, initial_working_directory_uri))
+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TITLE]);
 }
 
 char *
@@ -1727,7 +1804,8 @@ ptyxis_tab_set_previous_working_directory_uri (PtyxisTab  *self,
 {
   g_return_if_fail (PTYXIS_IS_TAB (self));
 
-  g_set_str (&self->previous_working_directory_uri, previous_working_directory_uri);
+  if (g_set_str (&self->previous_working_directory_uri, previous_working_directory_uri))
+    g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TITLE]);
 }
 
 static void
