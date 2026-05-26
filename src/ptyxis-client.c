@@ -56,6 +56,57 @@ enum {
   N_SIGNALS
 };
 
+static const char ptyxis_prompt_command_func[] =
+  "() { printf '\\033]0;%s@%s:%s\\007' \"${USER:-$(id -un)}\" \"${HOSTNAME:-$(hostname)}\" \"$PWD\"; }";
+
+static const char ptyxis_ssh_func[] =
+  "() { "
+  "if [ \"$#\" -eq 1 ] && [ \"${1#-}\" = \"$1\" ]; then "
+    "command ssh -t \"$1\" '"
+      "if command -v bash >/dev/null 2>&1; then "
+        "env '\\''BASH_FUNC___ptyxis_prompt_command%%=() { printf '\\''\\''\\''\\033]0;%s@%s:%s\\007'\\''\\''\\'' \"${USER:-$(id -un)}\" \"${HOSTNAME:-$(hostname)}\" \"$PWD\"; }'\\'' "
+            "PROMPT_COMMAND=__ptyxis_prompt_command bash -i; "
+      "else "
+        "exec \"${SHELL:-sh}\"; "
+      "fi"
+    "'; "
+  "else "
+    "command ssh \"$@\"; "
+  "fi; "
+  "}";
+
+static gboolean
+ptyxis_client_arg0_is_bash (const char *arg0)
+{
+  g_autofree char *basename = NULL;
+
+  if (arg0 == NULL)
+    return FALSE;
+
+  basename = g_path_get_basename (arg0);
+
+  return g_str_equal (basename, "bash") || g_str_equal (basename, "-bash");
+}
+
+static char **
+ptyxis_client_add_bash_integration (char **env)
+{
+  const char *prompt_command;
+  g_autofree char *combined_prompt_command = NULL;
+
+  prompt_command = g_environ_getenv (env, "PROMPT_COMMAND");
+  if (ptyxis_str_empty0 (prompt_command))
+    combined_prompt_command = g_strdup ("__ptyxis_prompt_command");
+  else
+    combined_prompt_command = g_strconcat ("__ptyxis_prompt_command;", prompt_command, NULL);
+
+  env = g_environ_setenv (env, "BASH_FUNC___ptyxis_prompt_command%%", ptyxis_prompt_command_func, TRUE);
+  env = g_environ_setenv (env, "BASH_FUNC_ssh%%", ptyxis_ssh_func, TRUE);
+  env = g_environ_setenv (env, "PROMPT_COMMAND", combined_prompt_command, TRUE);
+
+  return env;
+}
+
 static GType
 ptyxis_client_get_item_type (GListModel *model)
 {
@@ -711,6 +762,9 @@ ptyxis_client_spawn_async (PtyxisClient        *self,
       ptyxis_profile_get_login_shell (profile) &&
       ptyxis_shell_supports_dash_l (arg0))
     g_strv_builder_add (argv_builder, "-l");
+
+  if (ptyxis_client_arg0_is_bash (arg0))
+    env = ptyxis_client_add_bash_integration (g_steal_pointer (&env));
 
   if (last_working_directory_uri != NULL)
     last_directory = g_file_new_for_uri (last_working_directory_uri);
