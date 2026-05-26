@@ -16,6 +16,15 @@ testsuite_c_args = [
 
 testsuite = {
   'test-podman' : {},
+  'test-util' : {
+    'sources' : [
+      '../src/ptyxis-util.c',
+    ],
+    'deps' : [
+      dependency('gio-unix-2.0', version: glib_req),
+      dependency('vte-2.91-gtk4', version: vte_req),
+    ],
+  },
 }
 
 testsuite_deps = [
@@ -24,9 +33,9 @@ testsuite_deps = [
 
 foreach test, params: testsuite
   test_exe = executable(test,
-    ['@0@.c'.format(test)] + ptyxis_agent_sources,
+    ['@0@.c'.format(test)] + params.get('sources', ptyxis_agent_sources),
                  c_args: testsuite_c_args,
-           dependencies: testsuite_deps,
+           dependencies: params.get('deps', testsuite_deps),
     include_directories: [include_directories('..'), include_directories('.'), include_directories('../agent')],
   )
   if not params.get('skip', false)

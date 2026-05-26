@@ -252,6 +252,46 @@ ptyxis_path_collapse (const char *path)
   return g_steal_pointer (&expanded);
 }
 
+char *
+ptyxis_window_title_to_path (const char *window_title)
+{
+  g_autofree char *title = NULL;
+  g_autofree char *left = NULL;
+  g_autofree char *right = NULL;
+  g_autofree char *host = NULL;
+  const char *colon;
+  const char *at;
+
+  if (ptyxis_str_empty0 (window_title))
+    return NULL;
+
+  title = g_strstrip (g_strdup (window_title));
+  colon = strchr (title, ':');
+  if (colon == NULL)
+    return NULL;
+
+  left = g_strndup (title, colon - title);
+  g_strstrip (left);
+
+  right = g_strdup (colon + 1);
+  g_strstrip (right);
+
+  if (ptyxis_str_empty0 (left) ||
+      ptyxis_str_empty0 (right) ||
+      strchr (left, ' ') != NULL ||
+      (right[0] != '/' && right[0] != '~'))
+    return NULL;
+
+  at = strrchr (left, '@');
+  host = g_strdup (at != NULL ? at + 1 : left);
+  g_strstrip (host);
+
+  if (ptyxis_str_empty0 (host))
+    return NULL;
+
+  return g_strdup_printf ("%s: %s", host, right);
+}
+
 static void
 ptyxis_init_ctor (void)
 {
