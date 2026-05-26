@@ -59,22 +59,6 @@ enum {
 static const char ptyxis_prompt_command_func[] =
   "() { printf '\\033]0;%s@%s:%s\\007' \"${USER:-$(id -un)}\" \"${HOSTNAME:-$(hostname)}\" \"$PWD\"; }";
 
-static const char ptyxis_ssh_func[] =
-  "() { "
-  "if [ \"$#\" -eq 1 ] && [ \"${1#-}\" = \"$1\" ]; then "
-    "command ssh -t \"$1\" '"
-      "if command -v bash >/dev/null 2>&1; then "
-        "env '\\''BASH_FUNC___ptyxis_prompt_command%%=() { printf '\\''\\''\\''\\033]0;%s@%s:%s\\007'\\''\\''\\'' \"${USER:-$(id -un)}\" \"${HOSTNAME:-$(hostname)}\" \"$PWD\"; }'\\'' "
-            "PROMPT_COMMAND=__ptyxis_prompt_command bash -i; "
-      "else "
-        "exec \"${SHELL:-sh}\"; "
-      "fi"
-    "'; "
-  "else "
-    "command ssh \"$@\"; "
-  "fi; "
-  "}";
-
 static gboolean
 ptyxis_client_arg0_is_bash (const char *arg0)
 {
@@ -101,7 +85,6 @@ ptyxis_client_add_bash_integration (char **env)
     combined_prompt_command = g_strconcat ("__ptyxis_prompt_command;", prompt_command, NULL);
 
   env = g_environ_setenv (env, "BASH_FUNC___ptyxis_prompt_command%%", ptyxis_prompt_command_func, TRUE);
-  env = g_environ_setenv (env, "BASH_FUNC_ssh%%", ptyxis_ssh_func, TRUE);
   env = g_environ_setenv (env, "PROMPT_COMMAND", combined_prompt_command, TRUE);
 
   return env;
