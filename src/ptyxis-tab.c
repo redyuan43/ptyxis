@@ -59,6 +59,7 @@ struct _PtyxisTab
   PtyxisProfile           *profile;
   PtyxisIpcProcess        *process;
   char                    *title_prefix;
+  char                    *last_remote_window_title_path;
   PtyxisTabMonitor        *monitor;
   char                    *uuid;
   PtyxisIpcContainer      *container_at_creation;
@@ -681,8 +682,14 @@ ptyxis_tab_notify_window_title_cb (PtyxisTab      *self,
                                    GParamSpec     *pspec,
                                    PtyxisTerminal *terminal)
 {
+  g_autofree char *window_title_path = NULL;
+
   g_assert (PTYXIS_IS_TAB (self));
   g_assert (PTYXIS_IS_TERMINAL (terminal));
+
+  window_title_path = ptyxis_tab_dup_window_title_path (self);
+  if (!ptyxis_str_empty0 (window_title_path))
+    g_set_str (&self->last_remote_window_title_path, window_title_path);
 
   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TITLE]);
   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_SUBTITLE]);
@@ -1210,6 +1217,7 @@ ptyxis_tab_dispose (GObject *object)
   g_clear_pointer (&self->initial_working_directory_uri, g_free);
   g_clear_pointer (&self->previous_working_directory_uri, g_free);
   g_clear_pointer (&self->title_prefix, g_free);
+  g_clear_pointer (&self->last_remote_window_title_path, g_free);
   g_clear_pointer (&self->initial_title, g_free);
   g_clear_pointer (&self->command, g_strfreev);
   g_clear_pointer (&self->command_line, g_free);
@@ -1684,6 +1692,10 @@ ptyxis_tab_dup_device_path (PtyxisTab  *self,
   if (!ptyxis_str_empty0 (window_title_path))
     return g_steal_pointer (&window_title_path);
 
+  if (self->leader_kind == PTYXIS_PROCESS_LEADER_KIND_REMOTE &&
+      !ptyxis_str_empty0 (self->last_remote_window_title_path))
+    return g_strdup (self->last_remote_window_title_path);
+
   local_hostname = g_get_host_name ();
   if (ptyxis_str_empty0 (local_hostname))
     local_hostname = _("My Computer");
@@ -2097,6 +2109,9 @@ ptyxis_tab_poll_agent_cb (GObject      *object,
     {
       changed = TRUE;
       self->leader_kind = leader_kind;
+
+      if (leader_kind != PTYXIS_PROCESS_LEADER_KIND_REMOTE)
+        g_clear_pointer (&self->last_remote_window_title_path, g_free);
 
       if (!ptyxis_tab_is_active (self))
         ptyxis_tab_set_needs_attention (self, TRUE);
