@@ -29,6 +29,7 @@
 #include "ptyxis-gated-list-model.h"
 #include "ptyxis-menu-row.h"
 #include "ptyxis-parking-lot.h"
+#include "ptyxis-palette.h"
 #include "ptyxis-preferences-window.h"
 #include "ptyxis-settings.h"
 #include "ptyxis-shrinker.h"
@@ -81,6 +82,7 @@ struct _PtyxisWindow
   GSignalGroup          *active_tab_signals;
   GSignalGroup          *selected_page_signals;
   PtyxisWindowDressing  *dressing;
+  PtyxisPalette         *palette_override;
   GtkBox                *visual_bell;
   GPropertyAction       *interface_style_action;
 
@@ -106,6 +108,87 @@ enum {
 };
 
 static GParamSpec *properties[N_PROPS];
+
+static const char * const window_palette_ids[] = {
+  "Ubuntu",
+  "Ic Green Ppl",
+  "Mono Cyan",
+  "Mono Amber",
+  "Grape",
+  "Cobalt 2",
+  "Everforest",
+  "Tokyo Night",
+  "Gruvbox",
+  "gnome",
+};
+
+static guint next_window_palette;
+
+static PtyxisPalette *
+ptyxis_window_dup_next_palette (void)
+{
+  for (guint i = 0; i < G_N_ELEMENTS (window_palette_ids); i++)
+    {
+      guint index = (next_window_palette + i) % G_N_ELEMENTS (window_palette_ids);
+      PtyxisPalette *palette = ptyxis_palette_lookup (window_palette_ids[index]);
+
+      if (palette != NULL)
+        {
+          next_window_palette = (index + 1) % G_N_ELEMENTS (window_palette_ids);
+          return palette;
+        }
+    }
+
+  return NULL;
+}
+
+static void
+ptyxis_window_ensure_palette_override (PtyxisWindow *self)
+{
+  g_assert (PTYXIS_IS_WINDOW (self));
+
+  if (self->palette_override == NULL)
+    self->palette_override = ptyxis_window_dup_next_palette ();
+}
+
+static void
+ptyxis_window_apply_palette_override (PtyxisWindow *self,
+                                      PtyxisTab    *tab)
+{
+  PtyxisTerminal *terminal;
+
+  g_assert (PTYXIS_IS_WINDOW (self));
+  g_assert (PTYXIS_IS_TAB (tab));
+
+  ptyxis_window_ensure_palette_override (self);
+
+  if (self->palette_override == NULL)
+    return;
+
+  terminal = ptyxis_tab_get_terminal (tab);
+  ptyxis_terminal_set_palette (terminal, self->palette_override);
+
+  if (self->dressing != NULL)
+    ptyxis_window_dressing_set_palette (self->dressing, self->palette_override);
+}
+
+static gboolean
+bind_profile_palette_cb (GBinding     *binding,
+                         const GValue *from_value,
+                         GValue       *to_value,
+                         gpointer      user_data)
+{
+  PtyxisWindow *self = user_data;
+
+  g_assert (PTYXIS_IS_WINDOW (self));
+
+  if (self->palette_override != NULL)
+    g_value_set_object (to_value, self->palette_override);
+  else
+    g_value_copy (from_value, to_value);
+
+  return TRUE;
+}
 
 static void
 ptyxis_window_save_size (PtyxisWindow *self)
@@ -521,6 +604,9 @@ ptyxis_window_notify_selected_page_cb (PtyxisWindow *self,
     g_action_map_add_action (G_ACTION_MAP (self), G_ACTION (read_only));
 
   g_binding_group_set_source (self->active_tab_bindings, tab);
+
+  if (tab != NULL)
+    ptyxis_window_apply_palette_override (self, tab);
 
   g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_ACTIVE_TAB]);
 
@@ -1632,9 +1718,10 @@ ptyxis_window_constructed (GObject *object)
   G_OBJECT_CLASS (ptyxis_window_parent_class)->constructed (object);
 
   self->dressing = ptyxis_window_dressing_new (self);
-  g_binding_group_bind (self->profile_bindings, "palette",
-                        self->dressing, "palette",
-                        G_BINDING_SYNC_CREATE);
+  g_binding_group_bind_full (self->profile_bindings, "palette",
+                             self->dressing, "palette",
+                             G_BINDING_SYNC_CREATE,
+                             bind_profile_palette_cb, NULL, self, NULL);
   g_binding_group_bind (self->profile_bindings, "opacity",
                         self->dressing, "opacity",
                         G_BINDING_SYNC_CREATE);
@@ -1967,6 +2054,7 @@ ptyxis_window_finalize (GObject *object)
 
   g_clear_object (&self->active_tab_bindings);
   g_clear_object (&self->active_tab_signals);
+  g_clear_object (&self->palette_override);
   g_clear_object (&self->profile_bindings);
   g_clear_object (&self->selected_page_signals);
 
@@ -2339,6 +2427,7 @@ ptyxis_window_append_tab (PtyxisWindow *self,
   page = adw_tab_view_append (self->tab_view, GTK_WIDGET (tab));
 
   ptyxis_window_setup_page (self, tab, page);
+  ptyxis_window_apply_palette_override (self, tab);
 
   ptyxis_tab_grab_focus (tab);
 }
@@ -2445,6 +2534,7 @@ ptyxis_window_add_tab (PtyxisWindow *self,
   page = adw_tab_view_insert (self->tab_view, GTK_WIDGET (tab), position);
 
   ptyxis_window_setup_page (self, tab, page);
+  ptyxis_window_apply_palette_override (self, tab);
 
   /* Resize if we are going from 1->2 tabs */
   if (adw_tab_view_get_n_pages (self->tab_view) == 2)
@@ -2465,6 +2555,7 @@ ptyxis_window_add_tab_at_end (PtyxisWindow *self,
   page = adw_tab_view_insert (self->tab_view, GTK_WIDGET (tab), position);
 
   ptyxis_window_setup_page (self, tab, page);
+  ptyxis_window_apply_palette_override (self, tab);
 
   /* Resize if we are going from 1->2 tabs */
   if (adw_tab_view_get_n_pages (self->tab_view) == 2)
