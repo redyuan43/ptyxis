@@ -143,23 +143,6 @@ ptyxis_window_dressing_update (PtyxisWindowDressing *self)
                               "window.%s .window-contents revealer.raised.top-bar { background-color: %s; color: %s; }\n",
                               self->css_class, titlebar_bg, titlebar_fg);
       g_string_append_printf (string,
-                              "window.%s .window-contents headerbar.main-header-bar { background-color: %s; color: %s; }\n",
-                              self->css_class, titlebar_bg, titlebar_fg);
-      g_string_append_printf (string,
-                              "window.%s .window-contents tabbar { background-color: %s; color: %s; }\n",
-                              self->css_class, titlebar_bg, titlebar_fg);
-      g_string_append_printf (string,
-                              "window.%s .window-contents tabbar tab:selected { background-color: alpha(%s,.38); color: %s; }\n",
-                              self->css_class, titlebar_fg, titlebar_fg);
-      g_string_append_printf (string,
-                              "window.%s .window-contents headerbar.main-header-bar button,"
-                              "window.%s .window-contents headerbar.main-header-bar menubutton,"
-                              "window.%s .window-contents headerbar.main-header-bar togglebutton { color: %s; }\n",
-                              self->css_class,
-                              self->css_class,
-                              self->css_class,
-                              titlebar_fg);
-      g_string_append_printf (string,
                               "window.%s .window-contents box.visual-bell headerbar { background-color: transparent; }\n"
                               "window.%s .window-contents box.visual-bell { animation: visual-bell-%s-%s 0.3s ease-out; }\n"
                               "@keyframes visual-bell-%s-%s { 50%% { background-color: %s; color: %s; } }\n",

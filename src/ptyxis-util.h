@@ -51,6 +51,7 @@ PtyxisProcessKind   ptyxis_get_process_kind      (void) G_GNUC_CONST;
 const char * const *ptyxis_host_environ          (void) G_GNUC_CONST;
 char               *ptyxis_path_expand           (const char *path);
 char               *ptyxis_path_collapse         (const char *path);
+const char         *ptyxis_palette_id_for_terminal (guint serial);
 char               *ptyxis_window_title_to_path  (const char *title);
 gboolean            ptyxis_shell_supports_dash_l (const char *shell);
 gboolean            ptyxis_is_shell              (const char *arg0);

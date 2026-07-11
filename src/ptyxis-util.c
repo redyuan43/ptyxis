@@ -349,6 +349,23 @@ ptyxis_parse_shells (const char *etc_shells)
 }
 
 const char *
+ptyxis_palette_id_for_terminal (guint serial)
+{
+  static const char * const palette_ids[] = {
+    "gnome",
+    "dracula",
+    "nord",
+    "solarized",
+    "tango",
+    "xterm",
+    "campbell",
+    "rxvt",
+  };
+
+  return palette_ids[serial % G_N_ELEMENTS (palette_ids)];
+}
+
+const char *
 ptyxis_app_name (void)
 {
 #if APP_IS_BUILDER
