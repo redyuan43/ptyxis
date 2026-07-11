@@ -89,6 +89,25 @@ timeout 15 dbus-run-session -- xvfb-run -a \
 gui_rc=$?
 set -e
 
+if ((gui_rc != 0)) && grep -q 'Failed to open display' "$gui_log"; then
+  xvfb_command=$(ps -eo args= | grep -m1 '[X]vfb :[0-9]' || true)
+  if [[ $xvfb_command =~ Xvfb[[:space:]]+(:[0-9]+) ]]; then
+    existing_display=${BASH_REMATCH[1]}
+    existing_xauthority=
+    if [[ $xvfb_command =~ -auth[[:space:]]+([^[:space:]]+) ]]; then
+      existing_xauthority=${BASH_REMATCH[1]}
+    fi
+
+    set +e
+    DISPLAY=$existing_display XAUTHORITY=$existing_xauthority \
+      timeout 15 dbus-run-session -- \
+      flatpak run org.gnome.Ptyxis -s -- sh -lc "sleep 2" \
+      >"$gui_log" 2>&1
+    gui_rc=$?
+    set -e
+  fi
+fi
+
 if ((gui_rc == 0)); then
   echo "GUI_OK clean-exit"
 elif ((gui_rc == 124)) &&
