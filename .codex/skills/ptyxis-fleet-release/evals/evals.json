@@ -1,0 +1,41 @@
+{
+  "skill_name": "ptyxis-fleet-release",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "在 AI 上把当前 Ptyxis tag 编译成 x86_64 Flatpak，跑测试并告诉我产物和校验值。",
+      "expected_output": "Uses the x86 builder, verifies project version and tests, and reports the bundle path and SHA-256 without silently accepting unrelated build failures.",
+      "files": [],
+      "expectations": [
+        "Uses scripts/build-x86-flatpak.sh rather than reconstructing the build ad hoc.",
+        "Rejects a mismatch between meson.build and the requested version.",
+        "Accepts the old-builder fallback only for the known appstream-compose failure after tests pass.",
+        "Reports the x86_64 bundle and SHA-256 output."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "把 v50.3.1 的 ARM 版本放到 GitHub 上原生编译，通过后上传到已有 Release。",
+      "expected_output": "Dispatches the native ARM workflow, watches it to completion, and verifies both aarch64 release assets.",
+      "files": [],
+      "expectations": [
+        "Uses scripts/dispatch-arm-release.sh and the ubuntu-24.04-arm workflow.",
+        "Waits for GitHub Actions to reach a terminal success state.",
+        "Verifies both the aarch64 Flatpak and checksum assets exist on the requested tag."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "给 edge、spark、agx、nx1-4、nano1-3 安装最新版 Ptyxis；Flathub 很慢，走 AMD 的 10808 代理，并逐台确认 GUI 能启动。",
+      "expected_output": "Uses bounded fleet concurrency, architecture-specific assets, SSH reverse proxying, Flatpak installation and overrides, per-host version checks, and headless GUI initialization verification.",
+      "files": [],
+      "expectations": [
+        "Uses scripts/install-flatpak-fleet.sh with bounded concurrency instead of ten unrestricted first-time downloads.",
+        "Detects each host architecture and chooses the matching Release asset.",
+        "Creates or reuses an SSH reverse proxy tunnel for slow Flathub downloads.",
+        "Applies the /app/lib64 Flatpak override and verifies the exact Ptyxis version per host.",
+        "Runs Xvfb GUI initialization checks and fails the fleet command when any host fails."
+      ]
+    }
+  ]
+}

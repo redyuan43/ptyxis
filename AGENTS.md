@@ -1,5 +1,16 @@
 # 项目经验记录
 
+## Project Skills
+
+- `ptyxis-fleet-release`
+  - Path: `.codex/skills/ptyxis-fleet-release/SKILL.md`
+  - Use for: building and testing x86_64 releases on AI, dispatching native
+    ARM64 GitHub builds, publishing release assets, installing Ptyxis across
+    the x86/Jetson fleet, configuring VPN-assisted Flatpak downloads, and
+    verifying versions and GUI startup.
+  - Trigger examples: “编译 Ptyxis release”, “发布 ARM Flatpak”, “安装到
+    edge/nx/nano”, “参考 skill 更新所有设备”.
+
 ## 经验：Ptyxis / SSH 远端路径 title 的正确做法
 
 目标：在 MI 上使用 Ptyxis 时，`ssh AI` 登录远端后，窗口 subtitle 能显示远端设备名和当前路径，例如：

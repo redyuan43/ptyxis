@@ -17,6 +17,7 @@ _Fig 1: Ptyxis tab overview for managing multiple terminal sessions._
 
 ---
 
+- [Fork Release & Fleet Automation](#fork-release--fleet-automation)
 - [What Makes Ptyxis Special?](#what-makes-ptyxis-special)
 - [Key Features](#key-features)
 - [Screenshots](#screenshots)
@@ -27,6 +28,28 @@ _Fig 1: Ptyxis tab overview for managing multiple terminal sessions._
 - [Report an Issue](https://gitlab.gnome.org/chergert/ptyxis/-/issues)
 
 ---
+
+## Fork Release & Fleet Automation
+
+This fork includes a project skill for building, publishing, installing, and
+verifying Ptyxis across the x86_64 and Jetson aarch64 fleet:
+
+```text
+.codex/skills/ptyxis-fleet-release/
+```
+
+Start with:
+
+- [`SKILL.md`](.codex/skills/ptyxis-fleet-release/SKILL.md) for the agent
+  workflow
+- [`README.md`](.codex/skills/ptyxis-fleet-release/README.md) for operator
+  commands
+- [`field-notes.md`](.codex/skills/ptyxis-fleet-release/references/field-notes.md)
+  for build, VPN, Flatpak, and GUI verification lessons
+
+The automation supports x86_64 builds on AI, native aarch64 builds in GitHub
+Actions, GitHub Release assets, architecture-aware fleet installation, SSH
+reverse proxying through the controller VPN, and per-device version/GUI checks.
 
 ## What Makes Ptyxis Special?
 
