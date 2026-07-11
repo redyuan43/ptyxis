@@ -31,12 +31,30 @@ if [[ -n "$proxy_url" ]]; then
   export HTTPS_PROXY=$proxy_url
 fi
 
+ptyxis_version() {
+  local output
+  local rc
+
+  set +e
+  output=$(flatpak run --command=ptyxis org.gnome.Ptyxis --version 2>&1)
+  rc=$?
+  set -e
+
+  if ((rc != 0)) && grep -q '/run/user/.*/doc/by-app/' <<<"$output"; then
+    systemctl --user restart xdg-document-portal.service
+    sleep 2
+    output=$(flatpak run --command=ptyxis org.gnome.Ptyxis --version 2>&1)
+  elif ((rc != 0)); then
+    printf '%s\n' "$output" >&2
+    return "$rc"
+  fi
+
+  sed -n '1s/^Ptyxis //p' <<<"$output"
+}
+
 installed_version=
 if flatpak info org.gnome.Ptyxis >/dev/null 2>&1; then
-  installed_version=$(
-    flatpak run --command=ptyxis org.gnome.Ptyxis --version 2>/dev/null |
-      sed -n '1s/^Ptyxis //p'
-  )
+  installed_version=$(ptyxis_version)
 fi
 
 if [[ "$installed_version" == "$version" ]]; then
@@ -51,10 +69,7 @@ flatpak override --user \
   --env=LD_LIBRARY_PATH=/app/lib64 \
   org.gnome.Ptyxis
 
-reported=$(
-  flatpak run --command=ptyxis org.gnome.Ptyxis --version |
-    sed -n '1s/^Ptyxis //p'
-)
+reported=$(ptyxis_version)
 [[ "$reported" == "$version" ]] || {
   echo "Expected Ptyxis $version, found $reported" >&2
   exit 1

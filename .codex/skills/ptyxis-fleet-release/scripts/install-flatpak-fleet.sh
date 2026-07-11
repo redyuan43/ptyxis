@@ -130,21 +130,27 @@ install_host() {
 
 failures=0
 batch_pids=()
+batch_hosts=()
 
 wait_batch() {
+  local index
   local pid
 
-  for pid in "${batch_pids[@]}"; do
+  for index in "${!batch_pids[@]}"; do
+    pid=${batch_pids[$index]}
     if ! wait "$pid"; then
+      echo "[${batch_hosts[$index]}] FAILED" >&2
       ((failures += 1))
     fi
   done
   batch_pids=()
+  batch_hosts=()
 }
 
 for host in $hosts; do
   install_host "$host" &
   batch_pids+=("$!")
+  batch_hosts+=("$host")
 
   if ((${#batch_pids[@]} >= jobs)); then
     wait_batch

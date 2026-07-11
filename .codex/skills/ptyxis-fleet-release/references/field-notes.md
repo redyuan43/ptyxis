@@ -142,6 +142,15 @@ Some hosts can have stale Xauthority state. Retry with the host's existing
 Xvfb display and matching `XAUTHORITY`, or test in a real logged-in desktop
 session.
 
+Flatpak can also fail before startup when a long-running document portal has
+lost its FUSE mount:
+
+```text
+bwrap: Can't find source path /run/user/1000/doc/by-app/org.gnome.Ptyxis
+```
+
+Restart `xdg-document-portal.service` in the user's systemd session and retry.
+
 ## GitHub CLI Compatibility
 
 Some fleet controllers have a `gh release download` implementation without
