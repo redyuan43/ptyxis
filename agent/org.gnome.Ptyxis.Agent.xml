@@ -218,6 +218,7 @@
       <arg name="pid" direction="out" type="i"/>
       <arg name="cmdline" direction="out" type="s"/>
       <arg name="leader_kind" direction="out" type="s"/>
+      <arg name="working_directory" direction="out" type="s"/>
     </method>
 
     <!--

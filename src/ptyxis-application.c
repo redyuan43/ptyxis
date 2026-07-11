@@ -1974,7 +1974,7 @@ ptyxis_application_has_foreground_process_cb (GObject      *object,
   g_assert (G_IS_ASYNC_RESULT (result));
   g_assert (G_IS_TASK (task));
 
-  if (!ptyxis_ipc_process_call_has_foreground_process_finish (process, NULL, NULL, NULL, NULL, NULL, result, &error))
+  if (!ptyxis_ipc_process_call_has_foreground_process_finish (process, NULL, NULL, NULL, NULL, NULL, NULL, result, &error))
     {
       const char *object_path = g_dbus_proxy_get_object_path (G_DBUS_PROXY (process));
       gpointer value;

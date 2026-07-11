@@ -249,6 +249,7 @@ ptyxis_process_impl_handle_has_foreground_process (PtyxisIpcProcess      *proces
   PtyxisProcessImpl *self = (PtyxisProcessImpl *)process;
   gboolean has_foreground_process = FALSE;
   g_autofree char *cmdline = NULL;
+  g_autofree char *working_directory = NULL;
   _g_autofd int pty_fd = -1;
   int pty_fd_handle;
   GPid pid = -1;
@@ -267,7 +268,12 @@ ptyxis_process_impl_handle_has_foreground_process (PtyxisIpcProcess      *proces
       has_foreground_process = pid != self->pid;
 
       if (pid > 0)
-        cmdline = get_cmdline_for_pid (pid);
+        {
+          g_autofree char *proc_path = g_strdup_printf ("/proc/%d/cwd", pid);
+
+          cmdline = get_cmdline_for_pid (pid);
+          working_directory = g_file_read_link (proc_path, NULL);
+        }
     }
 
   ptyxis_ipc_process_complete_has_foreground_process (process,
@@ -276,7 +282,8 @@ ptyxis_process_impl_handle_has_foreground_process (PtyxisIpcProcess      *proces
                                                       has_foreground_process,
                                                       pid,
                                                       cmdline ? cmdline : "",
-                                                      get_leader_kind (pid));
+                                                      get_leader_kind (pid),
+                                                      working_directory ? working_directory : "");
 
   return TRUE;
 }

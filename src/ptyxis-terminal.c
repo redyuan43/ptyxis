@@ -98,6 +98,7 @@ G_DEFINE_FINAL_TYPE (PtyxisTerminal, ptyxis_terminal, VTE_TYPE_TERMINAL)
 
 static GParamSpec *properties [N_PROPS];
 static guint signals[N_SIGNALS];
+static void ptyxis_terminal_paste_image (PtyxisTerminal *self);
 static const char * const url_regexes_str[] = {
   REGEX_URL_AS_IS,
   REGEX_URL_HTTP,
@@ -370,6 +371,13 @@ ptyxis_terminal_capture_key_pressed_cb (PtyxisTerminal     *self,
   g_assert (PTYXIS_IS_TERMINAL (self));
   g_assert (GTK_IS_EVENT_CONTROLLER_KEY (controller));
 
+  state &= gtk_accelerator_get_default_mod_mask ();
+  if ((keyval == GDK_KEY_v || keyval == GDK_KEY_V) &&
+      state == GDK_CONTROL_MASK)
+    {
+      ptyxis_terminal_paste_image (self);
+      return TRUE;
+    }
 
   /* HACK:
    *
@@ -513,6 +521,20 @@ ptyxis_terminal_paste_texture_cb (GObject      *object,
 
   if (vte_terminal_get_scroll_on_keystroke (VTE_TERMINAL (self)))
     ptyxis_terminal_scroll_to_bottom (self);
+}
+
+static void
+ptyxis_terminal_paste_image (PtyxisTerminal *self)
+{
+  GdkClipboard *clipboard;
+
+  g_assert (PTYXIS_IS_TERMINAL (self));
+
+  clipboard = gtk_widget_get_clipboard (GTK_WIDGET (self));
+  gdk_clipboard_read_texture_async (clipboard,
+                                    NULL,
+                                    ptyxis_terminal_paste_texture_cb,
+                                    g_object_ref (self));
 }
 
 static void
@@ -1638,11 +1660,15 @@ ptyxis_terminal_paste (PtyxisTerminal *self)
 {
   GdkContentFormats *formats;
   GdkClipboard *clipboard;
+  gboolean has_image;
 
   g_return_if_fail (PTYXIS_IS_TERMINAL (self));
 
   clipboard = gtk_widget_get_clipboard (GTK_WIDGET (self));
   formats = gdk_clipboard_get_formats (clipboard);
+  has_image = (gdk_content_formats_contain_gtype (formats, GDK_TYPE_TEXTURE) ||
+               gdk_content_formats_contain_mime_type (formats, "image/png") ||
+               gdk_content_formats_contain_mime_type (formats, "image/jpeg"));
 
   if (gdk_content_formats_contain_gtype (formats, G_TYPE_STRING))
     {
@@ -1651,11 +1677,8 @@ ptyxis_terminal_paste (PtyxisTerminal *self)
       if (vte_terminal_get_scroll_on_keystroke (VTE_TERMINAL (self)))
         ptyxis_terminal_scroll_to_bottom (self);
     }
-  else
-    gdk_clipboard_read_texture_async (clipboard,
-                                      NULL,
-                                      ptyxis_terminal_paste_texture_cb,
-                                      g_object_ref (self));
+  else if (has_image)
+    ptyxis_terminal_paste_image (self);
 }
 
 void

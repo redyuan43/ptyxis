@@ -61,6 +61,8 @@ struct _PtyxisTab
   PtyxisIpcProcess        *process;
   char                    *title_prefix;
   char                    *last_remote_window_title_path;
+  char                    *last_shell_device_path;
+  char                    *foreground_working_directory;
   PtyxisTabMonitor        *monitor;
   char                    *uuid;
   PtyxisIpcContainer      *container_at_creation;
@@ -83,6 +85,7 @@ struct _PtyxisTab
   PtyxisZoomLevel          zoom : 5;
   PtyxisProcessLeaderKind  leader_kind : 3;
   guint                    has_foreground_process : 1;
+  guint                    shell_command_running : 1;
   guint                    forced_exit : 1;
   guint                    ignore_osc_title : 1;
   guint                    ignore_snapshot : 1;
@@ -710,6 +713,50 @@ ptyxis_tab_notify_window_subtitle_cb (PtyxisTab      *self,
 }
 
 static void
+ptyxis_tab_update_shell_context (PtyxisTab      *self,
+                                 PtyxisTerminal *terminal)
+{
+  g_autofree char *current_directory_uri = NULL;
+  g_autofree char *device_path = NULL;
+
+  g_assert (PTYXIS_IS_TAB (self));
+  g_assert (PTYXIS_IS_TERMINAL (terminal));
+
+  current_directory_uri = ptyxis_terminal_dup_current_directory_uri (terminal);
+  device_path = ptyxis_tab_dup_device_path (self, current_directory_uri);
+
+  g_set_str (&self->last_shell_device_path, device_path);
+}
+
+static void
+ptyxis_tab_shell_precmd_cb (PtyxisTab      *self,
+                            PtyxisTerminal *terminal)
+{
+  g_assert (PTYXIS_IS_TAB (self));
+  g_assert (PTYXIS_IS_TERMINAL (terminal));
+
+  self->shell_command_running = FALSE;
+  ptyxis_tab_update_shell_context (self, terminal);
+
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_SUBTITLE]);
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TITLE]);
+}
+
+static void
+ptyxis_tab_shell_preexec_cb (PtyxisTab      *self,
+                             PtyxisTerminal *terminal)
+{
+  g_assert (PTYXIS_IS_TAB (self));
+  g_assert (PTYXIS_IS_TERMINAL (terminal));
+
+  ptyxis_tab_update_shell_context (self, terminal);
+  self->shell_command_running = TRUE;
+
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_SUBTITLE]);
+  g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TITLE]);
+}
+
+static void
 ptyxis_tab_increase_font_size_cb (PtyxisTab      *self,
                                   PtyxisTerminal *terminal)
 {
@@ -1228,6 +1275,8 @@ ptyxis_tab_dispose (GObject *object)
   g_clear_pointer (&self->previous_working_directory_uri, g_free);
   g_clear_pointer (&self->title_prefix, g_free);
   g_clear_pointer (&self->last_remote_window_title_path, g_free);
+  g_clear_pointer (&self->last_shell_device_path, g_free);
+  g_clear_pointer (&self->foreground_working_directory, g_free);
   g_clear_pointer (&self->initial_title, g_free);
   g_clear_pointer (&self->command, g_strfreev);
   g_clear_pointer (&self->command_line, g_free);
@@ -1515,6 +1564,8 @@ ptyxis_tab_class_init (PtyxisTabClass *klass)
   gtk_widget_class_bind_template_callback (widget_class, ptyxis_tab_notify_contains_focus_cb);
   gtk_widget_class_bind_template_callback (widget_class, ptyxis_tab_notify_window_title_cb);
   gtk_widget_class_bind_template_callback (widget_class, ptyxis_tab_notify_window_subtitle_cb);
+  gtk_widget_class_bind_template_callback (widget_class, ptyxis_tab_shell_precmd_cb);
+  gtk_widget_class_bind_template_callback (widget_class, ptyxis_tab_shell_preexec_cb);
   gtk_widget_class_bind_template_callback (widget_class, ptyxis_tab_increase_font_size_cb);
   gtk_widget_class_bind_template_callback (widget_class, ptyxis_tab_decrease_font_size_cb);
   gtk_widget_class_bind_template_callback (widget_class, ptyxis_tab_notify_palette_cb);
@@ -1725,10 +1776,21 @@ ptyxis_tab_dup_device_path (PtyxisTab  *self,
       if (!ptyxis_str_empty0 (self->last_remote_window_title_path))
         return g_strdup (self->last_remote_window_title_path);
     }
-
   local_hostname = g_get_host_name ();
   if (ptyxis_str_empty0 (local_hostname))
     local_hostname = _("My Computer");
+
+  if (self->leader_kind != PTYXIS_PROCESS_LEADER_KIND_REMOTE &&
+      !ptyxis_str_empty0 (self->foreground_working_directory))
+    {
+      path = ptyxis_path_collapse (self->foreground_working_directory);
+      return g_strdup_printf ("%s: %s", local_hostname, path);
+    }
+
+  if (self->leader_kind != PTYXIS_PROCESS_LEADER_KIND_REMOTE &&
+      self->shell_command_running &&
+      !ptyxis_str_empty0 (self->last_shell_device_path))
+    return g_strdup (self->last_shell_device_path);
 
   if (!ptyxis_str_empty0 (uri))
     {
@@ -2098,6 +2160,7 @@ ptyxis_tab_poll_agent_cb (GObject      *object,
   g_autoptr(GTask) task = user_data;
   g_autofree char *the_cmdline = NULL;
   g_autofree char *the_leader_kind = NULL;
+  g_autofree char *the_working_directory = NULL;
   PtyxisProcessLeaderKind leader_kind;
   gboolean has_foreground_process;
   gboolean changed = FALSE;
@@ -2117,6 +2180,7 @@ ptyxis_tab_poll_agent_cb (GObject      *object,
                                                          &the_pid,
                                                          &the_cmdline,
                                                          &the_leader_kind,
+                                                         &the_working_directory,
                                                          NULL,
                                                          result,
                                                          NULL);
@@ -2171,6 +2235,9 @@ ptyxis_tab_poll_agent_cb (GObject      *object,
       g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_COMMAND_LINE]);
     }
 
+  if (g_set_str (&self->foreground_working_directory, the_working_directory))
+    changed = TRUE;
+
   if (changed)
     g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_TITLE]);
 
@@ -2201,6 +2268,7 @@ ptyxis_tab_poll_agent_async (PtyxisTab           *self,
     {
       self->has_foreground_process = FALSE;
       self->pid = -1;
+      g_clear_pointer (&self->foreground_working_directory, g_free);
 
       if (g_set_str (&self->command_line, NULL))
         g_object_notify_by_pspec (G_OBJECT (self), properties[PROP_COMMAND_LINE]);
