@@ -28,11 +28,22 @@ test_window_title_to_path (void)
   assert_window_title_path ("local shell", NULL);
 }
 
+static void
+test_palette_id_for_terminal (void)
+{
+  g_assert_cmpstr (ptyxis_palette_id_for_terminal (0), ==, "gnome");
+  g_assert_cmpstr (ptyxis_palette_id_for_terminal (1), ==, "dracula");
+  g_assert_cmpstr (ptyxis_palette_id_for_terminal (7), ==, "rxvt");
+  g_assert_cmpstr (ptyxis_palette_id_for_terminal (8), ==, "gnome");
+  g_assert_cmpstr (ptyxis_palette_id_for_terminal (G_MAXUINT), ==, "rxvt");
+}
+
 int
 main (int argc,
       char *argv[])
 {
   g_test_init (&argc, &argv, NULL);
+  g_test_add_func ("/Ptyxis/Util/palette-id-for-terminal", test_palette_id_for_terminal);
   g_test_add_func ("/Ptyxis/Util/window-title-to-path", test_window_title_to_path);
   return g_test_run ();
 }

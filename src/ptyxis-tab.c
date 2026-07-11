@@ -57,6 +57,7 @@ struct _PtyxisTab
   char                    *initial_working_directory_uri;
   char                    *previous_working_directory_uri;
   PtyxisProfile           *profile;
+  PtyxisPalette           *palette;
   PtyxisIpcProcess        *process;
   char                    *title_prefix;
   PtyxisTabMonitor        *monitor;
@@ -94,6 +95,7 @@ enum {
   PROP_ICON,
   PROP_IGNORE_OSC_TITLE,
   PROP_INDICATOR_ICON,
+  PROP_PALETTE,
   PROP_PROCESS_LEADER_KIND,
   PROP_PROFILE,
   PROP_PROGRESS,
@@ -127,6 +129,7 @@ static XdpPortal *portal;
 
 static GParamSpec *properties[N_PROPS];
 static guint signals[N_SIGNALS];
+static gint next_palette_serial;
 static char *ptyxis_tab_dup_device_path (PtyxisTab  *self,
                                          const char *uri);
 static char *ptyxis_tab_dup_window_title_path (PtyxisTab *self);
@@ -889,8 +892,14 @@ ptyxis_tab_constructed (GObject *object)
 {
   PtyxisTab *self = (PtyxisTab *)object;
   PtyxisSettings *settings;
+  const char *palette_id;
 
   G_OBJECT_CLASS (ptyxis_tab_parent_class)->constructed (object);
+
+  palette_id = ptyxis_palette_id_for_terminal (g_atomic_int_add (&next_palette_serial, 1));
+  self->palette = ptyxis_palette_lookup (palette_id);
+  if (self->palette == NULL)
+    self->palette = ptyxis_profile_dup_palette (self->profile);
 
   settings = ptyxis_application_get_settings (PTYXIS_APPLICATION_DEFAULT);
   g_object_bind_property (settings, "audible-bell",
@@ -1194,6 +1203,7 @@ ptyxis_tab_dispose (GObject *object)
     gtk_widget_unparent (child);
 
   g_clear_object (&self->cached_texture);
+  g_clear_object (&self->palette);
   g_clear_object (&self->profile);
   g_clear_object (&self->profile_signals);
   g_clear_object (&self->process);
@@ -1252,6 +1262,10 @@ ptyxis_tab_get_property (GObject    *object,
 
     case PROP_INDICATOR_ICON:
       g_value_take_object (value, ptyxis_tab_dup_indicator_icon (self));
+      break;
+
+    case PROP_PALETTE:
+      g_value_set_object (value, ptyxis_tab_get_palette (self));
       break;
 
     case PROP_PROCESS_LEADER_KIND:
@@ -1378,6 +1392,12 @@ ptyxis_tab_class_init (PtyxisTabClass *klass)
   properties[PROP_INDICATOR_ICON] =
     g_param_spec_object ("indicator-icon", NULL, NULL,
                          G_TYPE_ICON,
+                         (G_PARAM_READABLE |
+                          G_PARAM_STATIC_STRINGS));
+
+  properties[PROP_PALETTE] =
+    g_param_spec_object ("palette", NULL, NULL,
+                         PTYXIS_TYPE_PALETTE,
                          (G_PARAM_READABLE |
                           G_PARAM_STATIC_STRINGS));
 
@@ -1565,6 +1585,14 @@ ptyxis_tab_get_profile (PtyxisTab *self)
   g_return_val_if_fail (PTYXIS_IS_TAB (self), NULL);
 
   return self->profile;
+}
+
+PtyxisPalette *
+ptyxis_tab_get_palette (PtyxisTab *self)
+{
+  g_return_val_if_fail (PTYXIS_IS_TAB (self), NULL);
+
+  return self->palette;
 }
 
 /**
