@@ -42,7 +42,7 @@ jobs:
             | .modules[-1].sources = [{"type": "dir", "path": "."}]
             | .modules[-1]."post-install" =
                 ((.modules[-1]."post-install" // []) +
-                 ["meson test -C _flatpak_build --print-errorlogs"])
+                 ["meson test --print-errorlogs"])
           ' org.gnome.Ptyxis.Devel.json > org.gnome.Ptyxis.Release.json
 
       - name: Build and test
