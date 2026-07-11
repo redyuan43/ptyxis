@@ -61,7 +61,8 @@ download_asset() {
   local arch=$1
   local bundle="ptyxis-$version-$arch.flatpak"
   if [[ ! -f "$cache_dir/$bundle" || ! -f "$cache_dir/$bundle.sha256" ]]; then
-    gh release download "$tag" --repo "$repo" --clobber \
+    rm -f "$cache_dir/$bundle" "$cache_dir/$bundle.sha256"
+    gh release download "$tag" --repo "$repo" \
       --pattern "$bundle*" --dir "$cache_dir"
   fi
   (cd "$cache_dir" && sha256sum -c "$bundle.sha256")

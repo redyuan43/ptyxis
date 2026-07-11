@@ -142,3 +142,8 @@ Some hosts can have stale Xauthority state. Retry with the host's existing
 Xvfb display and matching `XAUTHORITY`, or test in a real logged-in desktop
 session.
 
+## GitHub CLI Compatibility
+
+Some fleet controllers have a `gh release download` implementation without
+the `--clobber` option. Remove an incomplete cached bundle/checksum pair before
+downloading instead of relying on that flag.
