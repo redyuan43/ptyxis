@@ -61,7 +61,9 @@
                 <signal name="termprop-changed::vte.progress.value" handler="ptyxis_tab_invalidate_progress" swapped="1"/>
                 <signal name="match-clicked" handler="ptyxis_tab_match_clicked_cb" swapped="1"/>
                 <binding name="palette">
-                  <lookup name="palette">PtyxisTab</lookup>
+                  <lookup name="palette" type="PtyxisProfile">
+                    <lookup name="profile">PtyxisTab</lookup>
+                  </lookup>
                 </binding>
                 <binding name="scroll-on-keystroke">
                   <lookup name="scroll-on-keystroke" type="PtyxisProfile">

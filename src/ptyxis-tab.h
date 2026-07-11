@@ -86,7 +86,6 @@ G_DECLARE_FINAL_TYPE (PtyxisTab, ptyxis_tab, PTYXIS, TAB, GtkWidget)
 PtyxisTab          *ptyxis_tab_new                                (PtyxisProfile        *profile);
 PtyxisTerminal     *ptyxis_tab_get_terminal                       (PtyxisTab            *self);
 PtyxisProfile      *ptyxis_tab_get_profile                        (PtyxisTab            *self);
-PtyxisPalette      *ptyxis_tab_get_palette                        (PtyxisTab            *self);
 void                ptyxis_tab_apply_profile                      (PtyxisTab            *self,
                                                                    PtyxisProfile        *new_profile);
 PtyxisIpcProcess   *ptyxis_tab_get_process                        (PtyxisTab            *self);

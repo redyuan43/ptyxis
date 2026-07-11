@@ -1632,6 +1632,9 @@ ptyxis_window_constructed (GObject *object)
   G_OBJECT_CLASS (ptyxis_window_parent_class)->constructed (object);
 
   self->dressing = ptyxis_window_dressing_new (self);
+  g_binding_group_bind (self->profile_bindings, "palette",
+                        self->dressing, "palette",
+                        G_BINDING_SYNC_CREATE);
   g_binding_group_bind (self->profile_bindings, "opacity",
                         self->dressing, "opacity",
                         G_BINDING_SYNC_CREATE);
@@ -2198,9 +2201,6 @@ ptyxis_window_init (PtyxisWindow *self)
 
   g_binding_group_bind (self->active_tab_bindings, "profile",
                         self->profile_bindings, "source",
-                        G_BINDING_SYNC_CREATE);
-  g_binding_group_bind (self->active_tab_bindings, "palette",
-                        self->dressing, "palette",
                         G_BINDING_SYNC_CREATE);
   g_binding_group_bind_full (self->active_tab_bindings, "title",
                              self, "title",
