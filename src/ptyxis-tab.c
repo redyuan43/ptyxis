@@ -1716,13 +1716,15 @@ ptyxis_tab_dup_device_path (PtyxisTab  *self,
 
   g_assert (PTYXIS_IS_TAB (self));
 
-  window_title_path = ptyxis_tab_dup_window_title_path (self);
-  if (!ptyxis_str_empty0 (window_title_path))
-    return g_steal_pointer (&window_title_path);
+  if (self->leader_kind == PTYXIS_PROCESS_LEADER_KIND_REMOTE)
+    {
+      window_title_path = ptyxis_tab_dup_window_title_path (self);
+      if (!ptyxis_str_empty0 (window_title_path))
+        return g_steal_pointer (&window_title_path);
 
-  if (self->leader_kind == PTYXIS_PROCESS_LEADER_KIND_REMOTE &&
-      !ptyxis_str_empty0 (self->last_remote_window_title_path))
-    return g_strdup (self->last_remote_window_title_path);
+      if (!ptyxis_str_empty0 (self->last_remote_window_title_path))
+        return g_strdup (self->last_remote_window_title_path);
+    }
 
   local_hostname = g_get_host_name ();
   if (ptyxis_str_empty0 (local_hostname))
@@ -1752,6 +1754,13 @@ ptyxis_tab_dup_device_path (PtyxisTab  *self,
         {
           path = g_strdup (uri);
         }
+    }
+
+  if (ptyxis_str_empty0 (path))
+    {
+      window_title_path = ptyxis_tab_dup_window_title_path (self);
+      if (!ptyxis_str_empty0 (window_title_path))
+        return g_steal_pointer (&window_title_path);
     }
 
   if (ptyxis_str_empty0 (path))

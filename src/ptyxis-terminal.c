@@ -181,9 +181,21 @@ ptyxis_terminal_is_active (PtyxisTerminal *self)
   return active_terminal == self;
 }
 
+static gboolean
+ptyxis_terminal_clipboard_formats_can_paste (GdkContentFormats *formats)
+{
+  g_assert (formats != NULL);
+
+  return (gdk_content_formats_contain_gtype (formats, G_TYPE_STRING) ||
+          gdk_content_formats_contain_gtype (formats, GDK_TYPE_TEXTURE) ||
+          gdk_content_formats_contain_mime_type (formats, "image/png") ||
+          gdk_content_formats_contain_mime_type (formats, "image/jpeg"));
+}
+
 static void
 ptyxis_terminal_update_clipboard_actions (PtyxisTerminal *self)
 {
+  GdkContentFormats *formats;
   GdkClipboard *clipboard;
   gboolean can_paste;
   gboolean has_selection;
@@ -191,7 +203,8 @@ ptyxis_terminal_update_clipboard_actions (PtyxisTerminal *self)
   g_assert (PTYXIS_IS_TERMINAL (self));
 
   clipboard = gtk_widget_get_clipboard (GTK_WIDGET (self));
-  can_paste = gdk_content_formats_contain_gtype (gdk_clipboard_get_formats (clipboard), G_TYPE_STRING);
+  formats = gdk_clipboard_get_formats (clipboard);
+  can_paste = ptyxis_terminal_clipboard_formats_can_paste (formats);
   has_selection = vte_terminal_get_has_selection (VTE_TERMINAL (self));
 
   gtk_widget_action_set_enabled (GTK_WIDGET (self), "clipboard.copy", has_selection);
@@ -449,6 +462,57 @@ paste_clipboard_action (GtkWidget  *widget,
   g_assert (PTYXIS_IS_TERMINAL (widget));
 
   ptyxis_terminal_paste (PTYXIS_TERMINAL (widget));
+}
+
+static void
+ptyxis_terminal_paste_texture_cb (GObject      *object,
+                                  GAsyncResult *result,
+                                  gpointer      user_data)
+{
+  GdkClipboard *clipboard = GDK_CLIPBOARD (object);
+  g_autoptr(PtyxisTerminal) self = user_data;
+  g_autoptr(GdkTexture) texture = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree char *directory = NULL;
+  g_autofree char *filename = NULL;
+  g_autofree char *quoted = NULL;
+  g_autofree char *uuid = NULL;
+
+  g_assert (GDK_IS_CLIPBOARD (clipboard));
+  g_assert (PTYXIS_IS_TERMINAL (self));
+
+  texture = gdk_clipboard_read_texture_finish (clipboard, result, &error);
+  if (texture == NULL)
+    {
+      ptyxis_terminal_toast (self, 3, _("Clipboard image is not supported"));
+      return;
+    }
+
+  directory = g_build_filename (g_get_user_cache_dir (),
+                                APP_ID,
+                                "clipboard-images",
+                                NULL);
+  if (g_mkdir_with_parents (directory, 0700) != 0)
+    {
+      ptyxis_terminal_toast (self, 3, _("Failed to save clipboard image"));
+      return;
+    }
+
+  uuid = g_uuid_string_random ();
+  filename = g_strdup_printf ("%s/clipboard-%s.png", directory, uuid);
+
+  if (!gdk_texture_save_to_png (texture, filename))
+    {
+      ptyxis_terminal_toast (self, 3, _("Failed to save clipboard image"));
+      return;
+    }
+
+  quoted = g_shell_quote (filename);
+  vte_terminal_paste_text (VTE_TERMINAL (self), quoted);
+  ptyxis_terminal_toast (self, 2, _("Pasted clipboard image path"));
+
+  if (vte_terminal_get_scroll_on_keystroke (VTE_TERMINAL (self)))
+    ptyxis_terminal_scroll_to_bottom (self);
 }
 
 static void
@@ -1558,24 +1622,40 @@ ptyxis_terminal_dup_current_file_uri (PtyxisTerminal *self)
 gboolean
 ptyxis_terminal_can_paste (PtyxisTerminal *self)
 {
+  GdkContentFormats *formats;
   GdkClipboard *clipboard;
 
   g_return_val_if_fail (PTYXIS_IS_TERMINAL (self), FALSE);
 
   clipboard = gtk_widget_get_clipboard (GTK_WIDGET (self));
+  formats = gdk_clipboard_get_formats (clipboard);
 
-  return gdk_content_formats_contain_gtype (gdk_clipboard_get_formats (clipboard), G_TYPE_STRING);
+  return ptyxis_terminal_clipboard_formats_can_paste (formats);
 }
 
 void
 ptyxis_terminal_paste (PtyxisTerminal *self)
 {
+  GdkContentFormats *formats;
+  GdkClipboard *clipboard;
+
   g_return_if_fail (PTYXIS_IS_TERMINAL (self));
 
-  vte_terminal_paste_clipboard (VTE_TERMINAL (self));
+  clipboard = gtk_widget_get_clipboard (GTK_WIDGET (self));
+  formats = gdk_clipboard_get_formats (clipboard);
 
-  if (vte_terminal_get_scroll_on_keystroke (VTE_TERMINAL (self)))
-    ptyxis_terminal_scroll_to_bottom (self);
+  if (gdk_content_formats_contain_gtype (formats, G_TYPE_STRING))
+    {
+      vte_terminal_paste_clipboard (VTE_TERMINAL (self));
+
+      if (vte_terminal_get_scroll_on_keystroke (VTE_TERMINAL (self)))
+        ptyxis_terminal_scroll_to_bottom (self);
+    }
+  else
+    gdk_clipboard_read_texture_async (clipboard,
+                                      NULL,
+                                      ptyxis_terminal_paste_texture_cb,
+                                      g_object_ref (self));
 }
 
 void
