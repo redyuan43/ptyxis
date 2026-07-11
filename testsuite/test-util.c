@@ -32,10 +32,10 @@ static void
 test_palette_id_for_terminal (void)
 {
   g_assert_cmpstr (ptyxis_palette_id_for_terminal (0), ==, "gnome");
-  g_assert_cmpstr (ptyxis_palette_id_for_terminal (1), ==, "dracula");
-  g_assert_cmpstr (ptyxis_palette_id_for_terminal (7), ==, "rxvt");
+  g_assert_cmpstr (ptyxis_palette_id_for_terminal (1), ==, "Ubuntu");
+  g_assert_cmpstr (ptyxis_palette_id_for_terminal (7), ==, "Tokyo Night Day");
   g_assert_cmpstr (ptyxis_palette_id_for_terminal (8), ==, "gnome");
-  g_assert_cmpstr (ptyxis_palette_id_for_terminal (G_MAXUINT), ==, "rxvt");
+  g_assert_cmpstr (ptyxis_palette_id_for_terminal (G_MAXUINT), ==, "Tokyo Night Day");
 }
 
 int

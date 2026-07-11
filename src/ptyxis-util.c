@@ -353,13 +353,13 @@ ptyxis_palette_id_for_terminal (guint serial)
 {
   static const char * const palette_ids[] = {
     "gnome",
-    "dracula",
-    "nord",
-    "solarized",
-    "tango",
-    "xterm",
-    "campbell",
-    "rxvt",
+    "Ubuntu",
+    "Mono Cyan",
+    "Mono Amber",
+    "Cobalt 2",
+    "Red Alert",
+    "Grass",
+    "Tokyo Night Day",
   };
 
   return palette_ids[serial % G_N_ELEMENTS (palette_ids)];
