@@ -1,0 +1,83 @@
+name: Build ARM64 release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and update
+        required: true
+        default: v50.3.1
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Install Flatpak tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y appstream-compose flatpak flatpak-builder jq
+          flatpak remote-add --user --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub \
+            org.gnome.Platform//50 org.gnome.Sdk//50
+
+      - name: Create release manifest
+        run: |
+          jq '
+            ."app-id" = "org.gnome.Ptyxis"
+            | ."runtime-version" = "50"
+            | ."build-options"."prepend-pkg-config-path" =
+                "/app/lib64/pkgconfig:/app/lib/pkgconfig"
+            | .modules[-1]."config-opts" =
+                ["-Ddevelopment=false", "-Dlibc-compat=true"]
+            | .modules[-1].sources = [{"type": "dir", "path": "."}]
+            | .modules[-1]."test-commands" =
+                ["meson test -C _flatpak_build --print-errorlogs"]
+          ' org.gnome.Ptyxis.Devel.json > org.gnome.Ptyxis.Release.json
+
+      - name: Build and test
+        run: |
+          flatpak-builder --user --force-clean --run-tests \
+            --repo=repo build-dir org.gnome.Ptyxis.Release.json
+
+      - name: Create and verify bundle
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          test "$(uname -m)" = aarch64
+          flatpak build build-dir /app/bin/ptyxis --version |
+            grep -F "Ptyxis ${TAG#v}"
+          version="${TAG#v}"
+          bundle="ptyxis-${version}-aarch64.flatpak"
+          flatpak build-bundle repo "$bundle" \
+            org.gnome.Ptyxis master --arch=aarch64 \
+            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
+          sha256sum "$bundle" | tee "${bundle}.sha256"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ptyxis-${{ inputs.tag }}-aarch64
+          path: |
+            ptyxis-*-aarch64.flatpak
+            ptyxis-*-aarch64.flatpak.sha256
+          if-no-files-found: error
+
+      - name: Upload assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release upload "$TAG" \
+            ptyxis-*-aarch64.flatpak \
+            ptyxis-*-aarch64.flatpak.sha256 \
+            --clobber
