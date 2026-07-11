@@ -40,13 +40,14 @@ jobs:
             | .modules[-1]."config-opts" =
                 ["-Ddevelopment=false", "-Dlibc-compat=true"]
             | .modules[-1].sources = [{"type": "dir", "path": "."}]
-            | .modules[-1]."test-commands" =
-                ["meson test -C _flatpak_build --print-errorlogs"]
+            | .modules[-1]."post-install" =
+                ((.modules[-1]."post-install" // []) +
+                 ["meson test -C _flatpak_build --print-errorlogs"])
           ' org.gnome.Ptyxis.Devel.json > org.gnome.Ptyxis.Release.json
 
       - name: Build and test
         run: |
-          flatpak-builder --user --force-clean --run-tests \
+          flatpak-builder --user --force-clean \
             --repo=repo build-dir org.gnome.Ptyxis.Release.json
 
       - name: Create and verify bundle
