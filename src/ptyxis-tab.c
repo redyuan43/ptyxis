@@ -1857,6 +1857,10 @@ ptyxis_tab_dup_current_directory_uri (PtyxisTab *self)
 {
   g_return_val_if_fail (PTYXIS_IS_TAB (self), NULL);
 
+  if (self->leader_kind != PTYXIS_PROCESS_LEADER_KIND_REMOTE &&
+      !ptyxis_str_empty0 (self->foreground_working_directory))
+    return g_filename_to_uri (self->foreground_working_directory, NULL, NULL);
+
   return ptyxis_terminal_dup_current_directory_uri (self->terminal);
 }
 

@@ -1,5 +1,5 @@
 project('ptyxis', 'c',
-          version: '50.3.3',
+          version: '50.3.4',
     meson_version: '>= 1.0.0',
   default_options: [ 'warning_level=2', 'werror=false', 'c_std=gnu11', ],
 )
